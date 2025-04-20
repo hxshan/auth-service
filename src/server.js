@@ -6,6 +6,7 @@ import { corsOptions } from "./config/corsOptions.js";
 import { routes } from "../../user-service/src/routes/index.js";
 
 dotenv.config();
+const app = express();
 app.use(express.json());
 app.use(cors(corsOptions));
 
