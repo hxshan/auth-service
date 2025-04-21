@@ -1,27 +1,31 @@
-import express from "express";
-import dotenv from "dotenv";
-import mongoose from "mongoose";
-import cors from "cors";
-import { corsOptions } from "./config/corsOptions.js";
-import { routes } from "../../user-service/src/routes/index.js";
+require('dotenv').config()
+const express = require('express')
+const app = express()
+const cors = require("cors");
+const corsOptions = require("./config/corsOptions");
+const connection = require('./db')
+const customerAuthRoutes = require('./routes/customerAuthRoutes.js')
+const driverAuthRoutes = require("./routes/driverAuthRoutes");
+const restaurantAuthRoutes = require("./routes/restaurantAuthRoutes");
 
-dotenv.config();
-const app = express();
+
+//database
+connection()
+
 app.use(express.json());
 app.use(cors(corsOptions));
 
-routes(app)
+//routes
+app.use("/api/customer", customerAuthRoutes);
+app.use("/api/driver", driverAuthRoutes);
+app.use("/api/restaurant", restaurantAuthRoutes);
 
-const PORT = process.env.PORT || 5002;
-const MONGO_URI = process.env.MONGO_URI;
+// Error handling middleware
+app.use((err, req, res, next) => {
+    console.error(err.stack);
+    res.status(500).json({ message: "Something went wrong!" });
+});
 
-mongoose.connect(MONGO_URI).then(() => {
-    console.log("MongoDB connected");
-    app.listen(PORT, () => {
-      console.log(`User Service running on port ${PORT}`);
-    });
-  })
-  .catch((err) => {
-    console.error("MongoDB connection error:", err);
-    process.exit(1);
-  });
+const port = process.env.PORT || 8080;
+app.listen(port, ()=> console.log(`Listening on port ${port}...`))
+

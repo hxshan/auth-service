@@ -1,9 +1,10 @@
 // auth-service/src/models/User.js
 const mongoose = require("mongoose");
+const jwt = require("jsonwebtoken");
 
 const userSchema = new mongoose.Schema({
-  userId:{
-    type:String,
+  userId: {
+    type: String,
     required: true,
     unique: true,
   },
@@ -16,12 +17,11 @@ const userSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
-  role: {
-    type: String,
-    enum: ["customer", "restaurant", "driver", "admin"],
-    required: true,
+  roles: {
+    type: [String],
+    enum: ["customer", "restaurant", "driver"],
   },
-  isApproved: {
+  verified: {
     type: Boolean,
     default: false,
   },
@@ -29,6 +29,25 @@ const userSchema = new mongoose.Schema({
     type: Date,
     default: Date.now,
   },
+  profileCompleted: {
+    type: Boolean,
+    default: false,
+  },
 });
 
-module.exports = mongoose.model("User", userSchema);
+userSchema.methods.generateAuthToken = function () {
+  const token = jwt.sign(
+    {
+      _id: this._id,
+      userId: this.userId,
+      roles: this.roles,
+      verified: this.verified,
+    },
+    process.env.JWTPRIVATEKEY,
+    { expiresIn: "7d" }
+  );
+  return token;
+};
+
+const User = mongoose.model("User", userSchema);
+module.exports = { User };
