@@ -31,9 +31,6 @@ const generateOTP = () => {
 // Send OTP verification email
 const sendOTPVerificationEmail = async (user) => {
   try {
-    // Debug what's being received
-    console.log("User in sendOTPVerificationEmail:", JSON.stringify(user));
-    
     const otp = generateOTP();
     const hashedOTP = await bcrypt.hash(otp, 10);
 

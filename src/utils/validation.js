@@ -49,9 +49,21 @@ const validateResendOTP = (data) => {
   return schema.validate(data);
 };
 
+// Validate Add Role data
+const validateAddRole = (data) => {
+  const schema = Joi.object({
+    userId: Joi.string().required().label("User ID"),
+    email: Joi.string().email().required().label("Email"),
+    password: Joi.string().required().label("Password"),
+  });
+
+  return schema.validate(data);
+};
+
 module.exports = { 
   validateSignup, 
   validateLogin, 
   validateOTP,
-  validateResendOTP
+  validateResendOTP,
+  validateAddRole
 };

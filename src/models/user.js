@@ -21,9 +21,18 @@ const userSchema = new mongoose.Schema({
     type: [String],
     enum: ["customer", "restaurant", "driver"],
   },
-  verified: {
-    type: Boolean,
-    default: false,
+  status: {
+    type: String,
+    enum: ["inactive", "active", "pending", "suspended", "banned"],
+    default: "inactive",
+  },
+  roleStatus: {
+    type: Map,
+    of: {
+      type: String,
+      enum: ["inactive", "active", "pending", "suspended"]
+    },
+    default: {}
   },
   createdAt: {
     type: Date,
@@ -33,6 +42,10 @@ const userSchema = new mongoose.Schema({
     type: Boolean,
     default: false,
   },
+  updatedAt: {
+    type: Date,
+    default: Date.now,
+  }
 });
 
 userSchema.methods.generateAuthToken = function () {
@@ -41,7 +54,7 @@ userSchema.methods.generateAuthToken = function () {
       _id: this._id,
       userId: this.userId,
       roles: this.roles,
-      verified: this.verified,
+      roleStatus: this.roleStatus
     },
     process.env.JWTPRIVATEKEY,
     { expiresIn: "7d" }
