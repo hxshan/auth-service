@@ -24,23 +24,33 @@ class BaseAuthController {
     try {
       // Get request data
       const userData = req.body;
-
+  
       // Validate basic user data
       const { error } = validateSignup(userData);
       if (error) {
         return res.status(400).json({ message: error.details[0].message });
       }
-
+  
       // Check if user already exists
       const userFound = await User.findOne({ email: userData.email });
       
       if (userFound) {
+        // If user exists but is inactive (unverified), resend OTP
+        if (userFound.status === "inactive") {
+          // Send verification email again
+          await sendOTPVerificationEmail(userFound);
+          
+          return res.status(200).json({
+            message: "Verification code has been resent to your email.",
+            userId: userFound.userId,
+          });
+        }
         // If this is an existing active or pending user trying to add a new role
-        if (userFound.status === "active" || userFound.status === "pending") {
+        else if (userFound.status === "active" || userFound.status === "pending") {
           // Check if they already have this role
           if (userFound.roles.includes(this.userRole)) {
             return res.status(409).json({ 
-              message: `You already have the ${this.userRole} role` 
+              message: `You already have registered as ${this.userRole} ` 
             });
           }
           
@@ -78,47 +88,6 @@ class BaseAuthController {
             roles: updatedUser.roles,
             roleStatus: updatedUser.roleStatus
           });
-        } else if (userFound.status === "inactive") {
-          // FIXED: Instead of deleting the inactive user, update it to add the new role
-          // Keep existing roles and add the new one if not already present
-          const updatedRoles = userFound.roles.includes(this.userRole) 
-            ? userFound.roles 
-            : [...userFound.roles, this.userRole];
-          
-          // Hash password if changed
-          let hashPassword = userFound.password;
-          const passwordChanged = userData.password && (await bcrypt.compare(
-            userData.password,
-            userFound.password
-          )) === false;
-          
-          if (passwordChanged) {
-            const salt = await bcrypt.genSalt(Number(process.env.SALT) || 10);
-            hashPassword = await bcrypt.hash(userData.password, salt);
-          }
-          
-          // Update the user instead of deleting
-          await User.updateOne(
-            { _id: userFound._id },
-            { 
-              password: hashPassword,
-              roles: updatedRoles,
-              $set: { [`roleStatus.${this.userRole}`]: "inactive" },
-              status: "inactive" // Status remains inactive until verification
-            }
-          );
-          
-          // Get updated user for email verification
-          const updatedUser = await User.findById(userFound._id);
-          
-          // Send verification email
-          await sendOTPVerificationEmail(updatedUser);
-          
-          return res.status(200).json({
-            message: `Role ${this.userRole} added to your account. OTP sent to email for verification.`,
-            userId: updatedUser.userId,
-            roles: updatedUser.roles
-          });
         } else {
           // User is suspended or banned
           return res.status(403).json({ 
@@ -127,11 +96,11 @@ class BaseAuthController {
           });
         }
       }
-
-      // Hash password
+  
+      // Hash password for new user
       const salt = await bcrypt.genSalt(Number(process.env.SALT) || 10);
       const hashPassword = await bcrypt.hash(userData.password, salt);
-
+  
       // Set the initial role based on the controller
       let roles = [this.userRole];
       
@@ -148,12 +117,12 @@ class BaseAuthController {
         roleStatus: roleStatus,
         status: "inactive", // Overall account status starts as inactive
       });
-
+  
       await newUser.save();
-
+  
       // Send verification email
       await sendOTPVerificationEmail(newUser);
-
+  
       return res.status(201).json({
         message: `User registered successfully as ${this.userRole}. OTP sent to email for verification.`,
         userId: newUser.userId,
@@ -247,100 +216,108 @@ class BaseAuthController {
     }
   };
 
-  // Verify OTP - updated to handle multiple roles
-  verifyOTP = async (req, res) => {
-    try {
-      const { error } = validateOTP(req.body);
-      if (error) {
-        return res.status(400).json({ message: error.details[0].message });
-      }
-
-      const { userId, otp } = req.body;
-      const userOTPRecord = await UserOTPVerification.findOne({ userId });
-
-      if (!userOTPRecord) {
-        return res.status(400).json({
-          message: "No OTP record found or it may have expired",
-          status: "EXPIRED"
-        });
-      }
-
-      const { expiresAt, otp: hashedOTP } = userOTPRecord;
-
-      if (Date.now() > expiresAt) {
-        await UserOTPVerification.deleteMany({ userId });
-        return res.status(400).json({ 
-          message: "OTP has expired. Please request a new one",
-          status: "EXPIRED"
-        });
-      }
-
-      const isMatch = await bcrypt.compare(otp, hashedOTP);
-      if (!isMatch) {
-        return res.status(400).json({ 
-          message: "Invalid OTP",
-          status: "INVALID" 
-        });
-      }
-
-      // Find the user
-      const user = await User.findOne({ userId });
-      if (!user) {
-        return res.status(404).json({ 
-          message: "User not found",
-          status: "ERROR"
-        });
-      }
-
-      // Update roleStatus for each role
-      const updateOps = {};
-      let hasActive = false;
-      let hasPending = false;
-      
-      // Prepare the MongoDB update operations
-      user.roles.forEach(role => {
-        const roleStatus = role === "customer" ? "active" : "pending";
-        updateOps[`roleStatus.${role}`] = roleStatus;
-        
-        if (roleStatus === "active") hasActive = true;
-        if (roleStatus === "pending") hasPending = true;
-      });
-      
-      // Set overall account status based on role statuses
-      let overallStatus = "inactive";
-      if (hasActive) {
-        overallStatus = "active";
-      } else if (hasPending) {
-        overallStatus = "pending";
-      }
-
-      // Update user with new status values
-      await User.updateOne(
-        { userId }, 
-        { 
-          status: overallStatus,
-          $set: updateOps
-        }
-      );
-
-      // Get updated user for response
-      const updatedUser = await User.findOne({ userId });
-
-      // Delete the OTP record after successful verification
-      await UserOTPVerification.deleteMany({ userId });
-
-      return res.status(200).json({ 
-        message: "Email verified successfully",
-        status: "SUCCESS",
-        accountStatus: overallStatus,
-        roleStatus: updatedUser.roleStatus,
-        roles: updatedUser.roles
-      });
-    } catch (error) {
-      console.error("Error verifying OTP:", error.message);
-      return res.status(500).json({ message: "Internal Server Error" });
+  // Verify OTP - updated to handle multiple roles and return a JWT token
+verifyOTP = async (req, res) => {
+  try {
+    const { error } = validateOTP(req.body);
+    if (error) {
+      return res.status(400).json({ message: error.details[0].message });
     }
-  };
+
+    const { userId, otp } = req.body;
+    const userOTPRecord = await UserOTPVerification.findOne({ userId });
+
+    if (!userOTPRecord) {
+      return res.status(400).json({
+        message: "No OTP record found or it may have expired",
+        status: "EXPIRED"
+      });
+    }
+
+    const { expiresAt, otp: hashedOTP } = userOTPRecord;
+
+    if (Date.now() > expiresAt) {
+      await UserOTPVerification.deleteMany({ userId });
+      return res.status(400).json({ 
+        message: "OTP has expired. Please request a new one",
+        status: "EXPIRED"
+      });
+    }
+
+    const isMatch = await bcrypt.compare(otp, hashedOTP);
+    if (!isMatch) {
+      return res.status(400).json({ 
+        message: "Invalid OTP",
+        status: "INVALID" 
+      });
+    }
+
+    // Find the user
+    const user = await User.findOne({ userId });
+    if (!user) {
+      return res.status(404).json({ 
+        message: "User not found",
+        status: "ERROR"
+      });
+    }
+
+    // Update roleStatus for each role
+    const updateOps = {};
+    let hasActive = false;
+    let hasPending = false;
+    
+    // Prepare the MongoDB update operations
+    user.roles.forEach(role => {
+      const roleStatus = role === "customer" ? "active" : "pending";
+      updateOps[`roleStatus.${role}`] = roleStatus;
+      
+      if (roleStatus === "active") hasActive = true;
+      if (roleStatus === "pending") hasPending = true;
+    });
+    
+    // Set overall account status based on role statuses
+    let overallStatus = "inactive";
+    if (hasActive) {
+      overallStatus = "active";
+    } else if (hasPending) {
+      overallStatus = "pending";
+    }
+
+    // Update user with new status values
+    await User.updateOne(
+      { userId }, 
+      { 
+        status: overallStatus,
+        $set: updateOps
+      }
+    );
+
+    // Get updated user for response
+    const updatedUser = await User.findOne({ userId });
+
+    // Delete the OTP record after successful verification
+    await UserOTPVerification.deleteMany({ userId });
+
+    // Generate JWT token for the user
+    const token = updatedUser.generateAuthToken();
+
+    return res.status(200).json({ 
+      message: "Email verified successfully",
+      status: "SUCCESS",
+      accountStatus: overallStatus,
+      roleStatus: updatedUser.roleStatus,
+      roles: updatedUser.roles,
+      userId: updatedUser.userId,
+      email: updatedUser.email,
+      profileCompleted: updatedUser.profileCompleted,
+      currentRole: this.userRole, // Include the role they're logged in as
+      token: token // Add JWT token to response
+    });
+  } catch (error) {
+    console.error("Error verifying OTP:", error.message);
+    return res.status(500).json({ message: "Internal Server Error" });
+  }
+};
 
   // Add a new role to an existing user
   addRole = async (req, res) => {
