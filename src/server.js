@@ -12,13 +12,14 @@ const restaurantAuthRoutes = require("./routes/restaurantAuthRoutes");
 //database
 connection()
 
-app.use(express.json());
 app.use(cors(corsOptions));
 
+app.use(express.json());
+
 //routes
-app.use("/api/customer", customerAuthRoutes);
-app.use("/api/driver", driverAuthRoutes);
-app.use("/api/restaurant", restaurantAuthRoutes);
+app.use("/customer", customerAuthRoutes);
+app.use("/driver", driverAuthRoutes);
+app.use("/restaurant", restaurantAuthRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
@@ -26,6 +27,6 @@ app.use((err, req, res, next) => {
     res.status(500).json({ message: "Something went wrong!" });
 });
 
-const port = process.env.PORT || 8080;
+const port = process.env.PORT || 5002;
 app.listen(port, ()=> console.log(`Listening on port ${port}...`))
 

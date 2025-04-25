@@ -43,7 +43,6 @@ const validateOTP = (data) => {
 const validateResendOTP = (data) => {
   const schema = Joi.object({
     userId: Joi.string().required().label("User ID"),
-    email: Joi.string().email().required().label("Email"),
   });
 
   return schema.validate(data);

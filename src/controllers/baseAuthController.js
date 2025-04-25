@@ -20,6 +20,7 @@ class BaseAuthController {
 
   // Register user
   signup = async (req, res) => {
+    console.log('Auth Service received signup:', req.body);
     try {
       // Get request data
       const userData = req.body;
@@ -415,10 +416,10 @@ class BaseAuthController {
         return res.status(400).json({ message: error.details[0].message });
       }
 
-      const { userId, email } = req.body;
+      const { userId } = req.body;
       
       // Find the user
-      const user = await User.findOne({ userId, email });
+      const user = await User.findOne({ userId });
       if (!user) {
         return res.status(404).json({ message: "User not found" });
       }
