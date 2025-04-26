@@ -7,6 +7,7 @@ const connection = require('./db')
 const customerAuthRoutes = require('./routes/customerAuthRoutes.js')
 const driverAuthRoutes = require("./routes/driverAuthRoutes");
 const restaurantAuthRoutes = require("./routes/restaurantAuthRoutes");
+const userRoutes = require("./routes/userRoutes.js")
 
 
 //database
@@ -20,6 +21,7 @@ app.use(express.json());
 app.use("/customer", customerAuthRoutes);
 app.use("/driver", driverAuthRoutes);
 app.use("/restaurant", restaurantAuthRoutes);
+app.use("/users",userRoutes)
 
 // Error handling middleware
 app.use((err, req, res, next) => {
