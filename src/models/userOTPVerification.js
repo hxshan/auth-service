@@ -10,6 +10,9 @@ const userOTPVerificationSchema = new mongoose.Schema({
     type:String,
     required:true
   },
+  role:{
+    type:String
+  },
   createdAt: {
     type: Date,
     default: Date.now,
