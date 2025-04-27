@@ -30,7 +30,7 @@ const userSchema = new mongoose.Schema({
     type: Map,
     of: {
       type: String,
-      enum: ["inactive", "active", "pending", "suspended"]
+      enum: ["inactive", "active", "pending", "suspended" , "banned"]
     },
     default: {}
   },
